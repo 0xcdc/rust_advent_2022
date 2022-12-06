@@ -27,8 +27,7 @@ fn main() {
   let mut score1: u64 = 0;
   let mut score2: u64 = 0;
 
-  let mut it = lines.iter();
-  while let Some(line) = it.next() {
+  for line in lines {
     let elfs = line.split(',').collect::<Vec<&str>>();
 
     let elf1 = elfs[0].split('-').map(|x| x.parse::<u32>().unwrap()).collect::<Vec<u32>>();
