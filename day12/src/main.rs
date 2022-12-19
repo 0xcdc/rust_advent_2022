@@ -1,6 +1,8 @@
+use crossterm::{cursor, style::Print, QueueableCommand};
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::io::{stdin, BufRead, BufReader};
+use std::io::{stdin, stdout, BufRead, BufReader, Write};
+use std::{thread, time};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct Point {
@@ -71,33 +73,59 @@ impl Board {
         result
     }
 
-    fn dump_visited(self: &Board, already_visited: &HashSet<Point>) {
+    fn update_display(self: &Board, s: &str, last_board: &mut String) {
+        let mut stdout = stdout();
+        let mut old_chars = last_board.chars();
+        let mut new_chars = s.chars();
         for y in 0..self.height {
             for x in 0..self.width {
-                let p = Point { x, y };
-                print!(
-                    "{}",
-                    if already_visited.get(&p).is_some() {
-                        self.get(&p)
-                    } else {
-                        '.'
-                    }
-                );
+                let old = old_chars.next().unwrap();
+                let new = new_chars.next().unwrap();
+
+                if old != new {
+                    stdout
+                        .queue(cursor::MoveTo(x as u16, y as u16))
+                        .unwrap()
+                        .queue(Print(new))
+                        .unwrap();
+                }
             }
-            println!();
         }
-        println!("--------------------------------------------------");
+        stdout
+            .queue(cursor::MoveTo(0, self.height as u16 + 1))
+            .unwrap();
+        stdout.flush().unwrap();
+        thread::sleep(time::Duration::from_millis(1));
+        last_board.truncate(0);
+        last_board.push_str(s);
     }
 
-    fn dump_path(self: &Board, path: &[Point]) {
+    fn dump_visited(self: &Board, already_visited: &HashSet<Point>, last_board: &mut String) {
+        let mut s = String::new();
         for y in 0..self.height {
             for x in 0..self.width {
                 let p = Point { x, y };
-                print!("{}", if path.contains(&p) { self.get(&p) } else { '.' });
+                s.push(if already_visited.contains(&p) {
+                    self.get(&p)
+                } else {
+                    '.'
+                });
             }
-            println!();
         }
-        println!("--------------------------------------------------");
+
+        self.update_display(&s, last_board);
+    }
+
+    fn dump_path(self: &Board, path: &[Point], last_board: &mut String) {
+        let mut s = String::new();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let p = Point { x, y };
+                s.push(if path.contains(&p) { self.get(&p) } else { '.' });
+            }
+        }
+
+        self.update_display(&s, last_board);
     }
 }
 
@@ -123,9 +151,13 @@ fn main() {
 
     let mut answer = usize::MAX;
     let map = Board::new(data, width, height);
+    let mut path_length = 0;
+    let mut last_board = String::from_utf8(vec![b' '; height * width]).unwrap();
 
-    for y in 0..map.height {
-        for x in 0..map.width {
+    /*    for y in 0..map.height {
+    for x in 0..map.width {*/
+    for y in map.start.y..=map.start.y {
+        for x in map.start.x..=map.start.x {
             let start = Point { x, y };
             if map.get_height(&start) != 0 {
                 continue;
@@ -136,10 +168,15 @@ fn main() {
             already_visited.insert(start);
 
             while let Some(path) = working_set.pop_front() {
+                map.dump_visited(&already_visited, &mut last_board);
+                if path.len() > path_length {
+                    path_length = path.len();
+                    //map.dump_path(&path, &mut last_board);
+                }
                 let last_point = *path.last().unwrap();
                 if last_point == map.end {
                     if answer > path.len() - 1 {
-                        map.dump_path(&path);
+                        map.dump_path(&path, &mut last_board);
                         answer = path.len() - 1;
                     }
                     break;
@@ -159,5 +196,6 @@ fn main() {
         }
     }
 
+    println!();
     println!("{}", answer);
 }
